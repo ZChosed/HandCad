@@ -1,4 +1,5 @@
 import os
+import argparse
 import cv2
 import pyvista as pv
 import mediapipe as mp
@@ -7,6 +8,11 @@ import mediapipe as mp
 # Mute noisy background framework logs
 os.environ["GLOG_minloglevel"] = "3"
 os.environ["OPENCV_VIDEOIO_LOG_LEVEL"] = "ERROR"
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--phone", action="store_true", help="Use phone (index 0) instead of webcam (index 1)")
+args = parser.parse_args()
+CAMERA_INDEX = 0 if args.phone else 1
 
 # MP setup
 HAND_DETECTOR_PATH = '/Users/zchosed/HandCad/hand_detection_models/hand_landmarker.task'
@@ -24,15 +30,20 @@ options = HandLandmarkerOptions(
 frame_timestamp_ms = 0
 
 # OpenCV Video Capture setup
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(CAMERA_INDEX)
 
 # Setup PyVista Engine
 plotter = pv.Plotter()
 plotter.add_title("HandCAD (Native macOS Loop)", font_size=10)
 plotter.set_background("white")
 
-sphere_mesh = pv.Sphere(radius=1.0, center=(0, 0, 0))
+SCENE_SCALE = 10.0  # maps normalized [0,1] coords to [-5, 5] world units
+
+sphere_mesh = pv.Sphere(radius=0.3, center=(0, 0, 0))
 actor = plotter.add_mesh(sphere_mesh, color="cyan", show_edges=True)
+plotter.camera.position = (0, 0, 20)
+plotter.camera.focal_point = (0, 0, 0)
+plotter.camera.up = (0, 1, 0)
 
 # Counter variable to simulate tracking movement values (for testing)
 # Once MediaPipe is added back, this function will use your coordinates!
@@ -57,7 +68,7 @@ def update_scene_callback(step):
     hand_landmarker_result = landmarker.detect_for_video(mp_image, frame_timestamp_ms)
     frame_timestamp_ms += 10
 
-    x_3d, y_3d, z_3d = 0.0, 0.0, 0.0
+    x_3d, y_3d = 0.0, 0.0
     
     if hand_landmarker_result.hand_landmarks:
             for hand_landmarks in hand_landmarker_result.hand_landmarks:
@@ -69,12 +80,13 @@ def update_scene_callback(step):
                     
                     # cv2.circle(frame, (pixel_x, pixel_y), 12, (255, 0, 0), cv2.FILLED)
 
-                    x_3d = (index_tip.x) * 1.0
-                    y_3d = (1 - index_tip.y) * 1.0
-                    z_3d = index_tip.z * -1.0
+                    # MediaPipe: x/y are normalized [0,1], y=0 is top of image.
+                    # Convert to centered Cartesian: subtract 0.5, flip y, ignore z.
+                    x_3d = (index_tip.x - 0.5) * SCENE_SCALE
+                    y_3d = (0.5 - index_tip.y) * SCENE_SCALE
 
     # cv2.imshow('Hand Tracker', frame)
-    updated_sphere = pv.Sphere(radius=0.5, center=(x_3d, y_3d, z_3d))
+    updated_sphere = pv.Sphere(radius=0.3, center=(x_3d, y_3d, 0.0))
     actor.mapper.dataset.copy_from(updated_sphere)
     plotter.render()
 
