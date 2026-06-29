@@ -1,9 +1,6 @@
 import cv2
 import mediapipe as mp
 
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-
 HAND_DETECTOR_PATH = '/Users/zchosed/HandCad/hand_detection_models/hand_landmarker.task'
 
 BaseOptions = mp.tasks.BaseOptions
