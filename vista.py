@@ -38,16 +38,18 @@ plotter.add_title("HandCAD (Native macOS Loop)", font_size=10)
 plotter.set_background("white")
 
 SCENE_SCALE = 10.0  # maps normalized [0,1] coords to [-5, 5] world units
+FINGERTIP_INDICES = [4, 8, 12, 16, 20]  # thumb, index, middle, ring, pinky
+MAX_HANDS = 2
+fingertip_meshes = []
+for _ in range(MAX_HANDS * len(FINGERTIP_INDICES)):
+    mesh = pv.Sphere(radius=0.3, center=(0, 0, 0))
+    fingertip_meshes.append(mesh)
+    plotter.add_mesh(mesh, color="cyan", show_edges=True)
 
-sphere_mesh = pv.Sphere(radius=0.3, center=(0, 0, 0))
-actor = plotter.add_mesh(sphere_mesh, color="cyan", show_edges=True)
 plotter.camera.position = (0, 0, 20)
 plotter.camera.focal_point = (0, 0, 0)
 plotter.camera.up = (0, 1, 0)
-
-# Counter variable to simulate tracking movement values (for testing)
-# Once MediaPipe is added back, this function will use your coordinates!
-state = {"angle": 0.0}
+plotter.camera_set = True  # prevent show() from auto-fitting and overriding camera
 
 def close_all_applications():
     print("Exiting HandCAD cleanly...")
@@ -68,26 +70,18 @@ def update_scene_callback(step):
     hand_landmarker_result = landmarker.detect_for_video(mp_image, frame_timestamp_ms)
     frame_timestamp_ms += 10
 
-    x_3d, y_3d = 0.0, 0.0
-    
+    tips = []
     if hand_landmarker_result.hand_landmarks:
-            for hand_landmarks in hand_landmarker_result.hand_landmarks:
-                    
-                    index_tip = hand_landmarks[8]
-                    # h, w, _ = frame.shape
-                    # pixel_x = int(index_finger_tip.x * w)
-                    # pixel_y = int(index_finger_tip.y * h)
-                    
-                    # cv2.circle(frame, (pixel_x, pixel_y), 12, (255, 0, 0), cv2.FILLED)
+        for hand_landmarks in hand_landmarker_result.hand_landmarks:
+            for idx in FINGERTIP_INDICES:
+                lm = hand_landmarks[idx]
+                # MediaPipe: x/y normalized [0,1], y=0 is top. Convert to centered Cartesian.
+                tips.append(((lm.x - 0.5) * SCENE_SCALE, (0.5 - lm.y) * SCENE_SCALE, 0.0))
 
-                    # MediaPipe: x/y are normalized [0,1], y=0 is top of image.
-                    # Convert to centered Cartesian: subtract 0.5, flip y, ignore z.
-                    x_3d = (index_tip.x - 0.5) * SCENE_SCALE
-                    y_3d = (0.5 - index_tip.y) * SCENE_SCALE
+    for i, mesh in enumerate(fingertip_meshes):
+        center = tips[i] if i < len(tips) else (0.0, 0.0, 0.0)
+        mesh.copy_from(pv.Sphere(radius=0.3, center=center))
 
-    # cv2.imshow('Hand Tracker', frame)
-    updated_sphere = pv.Sphere(radius=0.3, center=(x_3d, y_3d, 0.0))
-    actor.mapper.dataset.copy_from(updated_sphere)
     plotter.render()
 
 with HandLandmarker.create_from_options(options) as landmarker:
