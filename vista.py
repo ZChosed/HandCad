@@ -29,7 +29,7 @@ cap = cv2.VideoCapture(0)
 # Setup PyVista Engine
 plotter = pv.Plotter()
 plotter.add_title("HandCAD (Native macOS Loop)", font_size=10)
-plotter.set_background("black")
+plotter.set_background("white")
 
 sphere_mesh = pv.Sphere(radius=1.0, center=(0, 0, 0))
 actor = plotter.add_mesh(sphere_mesh, color="cyan", show_edges=True)
@@ -37,6 +37,13 @@ actor = plotter.add_mesh(sphere_mesh, color="cyan", show_edges=True)
 # Counter variable to simulate tracking movement values (for testing)
 # Once MediaPipe is added back, this function will use your coordinates!
 state = {"angle": 0.0}
+
+def close_all_applications():
+    print("Exiting HandCAD cleanly...")
+    plotter.close()
+    cap.release()
+    cv2.destroyAllWindows()
+    os._exit()
 
 def update_scene_callback(step):
     global frame_timestamp_ms
@@ -55,31 +62,24 @@ def update_scene_callback(step):
     if hand_landmarker_result.hand_landmarks:
             for hand_landmarks in hand_landmarker_result.hand_landmarks:
                     
-                    index_finger_tip = hand_landmarks[0]
+                    index_tip = hand_landmarks[8]
                     # h, w, _ = frame.shape
                     # pixel_x = int(index_finger_tip.x * w)
                     # pixel_y = int(index_finger_tip.y * h)
                     
                     # cv2.circle(frame, (pixel_x, pixel_y), 12, (255, 0, 0), cv2.FILLED)
 
-                    x_3d = (index_finger_tip.x - 0.5) * 10.0
-                    y_3d = (0.5 - index_finger_tip.y) * 10.0
-                    z_3d = index_finger_tip.z * -10.0
+                    x_3d = (index_tip.x) * 1.0
+                    y_3d = (1 - index_tip.y) * 1.0
+                    z_3d = index_tip.z * -1.0
 
     # cv2.imshow('Hand Tracker', frame)
     updated_sphere = pv.Sphere(radius=0.5, center=(x_3d, y_3d, z_3d))
     actor.mapper.dataset.copy_from(updated_sphere)
-    
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        plotter.close() # Close PyVista if 'q' is pressed on the CV2 window
-
     plotter.render()
 
 with HandLandmarker.create_from_options(options) as landmarker:
     plotter.add_timer_event(max_steps=1000000, duration=30, callback=update_scene_callback)
+    plotter.add_key_event('q', close_all_applications)
     print("Starting native macOS event window...")
     plotter.show()
-
-cap.release()
-cv2.destroyAllWindows()
-print("Execution safely stopped.")
